@@ -19,6 +19,7 @@ class DatabaseHandler:
             self.conn = sqlite3.connect(self.db_name)
             self.cursor = self.conn.cursor()
             logging.info(f"Connected to database: {self.db_name}")
+            self.create_tables()
             return True
         except sqlite3.Error as e:
             logging.error(f"Database connection error: {e}")
@@ -63,6 +64,30 @@ class DatabaseHandler:
                     security_id TEXT,
                     FOREIGN KEY (stock_id) REFERENCES stocks (id),
                     UNIQUE (stock_id, timestamp)
+                )
+            ''')
+            
+            # Create settings table for auto order configuration
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS settings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    key TEXT UNIQUE,
+                    value TEXT,
+                    value_type TEXT,
+                    description TEXT,
+                    last_updated TEXT
+                )
+            ''')
+            
+            # Create watchlist table for auto order enabled symbols
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS watchlist (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    stock_id INTEGER,
+                    symbol TEXT,
+                    added_date TEXT,
+                    FOREIGN KEY (stock_id) REFERENCES stocks (id),
+                    UNIQUE (stock_id)
                 )
             ''')
             
@@ -278,3 +303,153 @@ class DatabaseHandler:
         except sqlite3.Error as e:
             logging.error(f"Error checking data existence: {e}")
             return False
+
+    def get_setting(self, key, default=None):
+        """Get a setting value from the database by key"""
+        try:
+            self.cursor.execute(
+                "SELECT value, value_type FROM settings WHERE key = ?", 
+                (key,)
+            )
+            result = self.cursor.fetchone()
+            
+            if result:
+                value, value_type = result
+                # Convert value based on its type
+                if value_type == 'int':
+                    return int(value)
+                elif value_type == 'float':
+                    return float(value)
+                elif value_type == 'bool':
+                    return value.lower() == 'true'
+                else:  # Treat as string by default
+                    return value
+            return default
+        except sqlite3.Error as e:
+            logging.error(f"Error retrieving setting {key}: {e}")
+            return default
+            
+    def set_setting(self, key, value, description=None):
+        """Save a setting value to the database"""
+        try:
+            # Determine the value type
+            if isinstance(value, bool):
+                value_str = str(value).lower()
+                value_type = 'bool'
+            elif isinstance(value, int):
+                value_str = str(value)
+                value_type = 'int'
+            elif isinstance(value, float):
+                value_str = str(value)
+                value_type = 'float'
+            else:
+                value_str = str(value)
+                value_type = 'string'
+                
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            # Check if description is provided
+            if description is None:
+                # Get existing description if any
+                self.cursor.execute("SELECT description FROM settings WHERE key = ?", (key,))
+                result = self.cursor.fetchone()
+                if result:
+                    description = result[0]
+                else:
+                    description = ""
+            
+            self.cursor.execute('''
+                INSERT OR REPLACE INTO settings 
+                (key, value, value_type, description, last_updated)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (key, value_str, value_type, description, current_time))
+            
+            self.conn.commit()
+            return True
+        except sqlite3.Error as e:
+            logging.error(f"Error saving setting {key}: {e}")
+            self.conn.rollback()
+            return False
+            
+    def get_all_settings(self):
+        """Get all settings as a dictionary"""
+        try:
+            self.cursor.execute("SELECT key, value, value_type FROM settings")
+            results = self.cursor.fetchall()
+            
+            settings = {}
+            for key, value, value_type in results:
+                # Convert value based on its type
+                if value_type == 'int':
+                    settings[key] = int(value)
+                elif value_type == 'float':
+                    settings[key] = float(value)
+                elif value_type == 'bool':
+                    settings[key] = value.lower() == 'true'
+                else:  # Treat as string by default
+                    settings[key] = value
+                    
+            return settings
+        except sqlite3.Error as e:
+            logging.error(f"Error retrieving all settings: {e}")
+            return {}
+            
+    def add_to_watchlist(self, symbol):
+        """Add a symbol to the watchlist"""
+        try:
+            # First, find the stock ID for this symbol
+            self.cursor.execute("SELECT id FROM stocks WHERE symbol = ?", (symbol,))
+            result = self.cursor.fetchone()
+            
+            if not result:
+                logging.error(f"Symbol {symbol} not found in stocks table")
+                return False
+                
+            stock_id = result[0]
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            # Insert into watchlist
+            self.cursor.execute('''
+                INSERT OR REPLACE INTO watchlist
+                (stock_id, symbol, added_date) 
+                VALUES (?, ?, ?)
+            ''', (stock_id, symbol, current_time))
+            
+            self.conn.commit()
+            return True
+        except sqlite3.Error as e:
+            logging.error(f"Error adding {symbol} to watchlist: {e}")
+            self.conn.rollback()
+            return False
+            
+    def remove_from_watchlist(self, symbol):
+        """Remove a symbol from the watchlist"""
+        try:
+            self.cursor.execute("DELETE FROM watchlist WHERE symbol = ?", (symbol,))
+            self.conn.commit()
+            return self.cursor.rowcount > 0
+        except sqlite3.Error as e:
+            logging.error(f"Error removing {symbol} from watchlist: {e}")
+            self.conn.rollback()
+            return False
+            
+    def clear_watchlist(self):
+        """Clear all symbols from the watchlist"""
+        try:
+            self.cursor.execute("DELETE FROM watchlist")
+            self.conn.commit()
+            return True
+        except sqlite3.Error as e:
+            logging.error(f"Error clearing watchlist: {e}")
+            self.conn.rollback()
+            return False
+            
+    def get_watchlist(self):
+        """Get all symbols in the watchlist"""
+        try:
+            self.cursor.execute("SELECT symbol FROM watchlist")
+            results = self.cursor.fetchall()
+            return [row[0] for row in results]
+        except sqlite3.Error as e:
+            logging.error(f"Error getting watchlist: {e}")
+            return []
