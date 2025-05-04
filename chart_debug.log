@@ -1,0 +1,18 @@
+Viewing chart for: ID=3851, Security ID=3432, Symbol=TATACONSUM
+Python libraries check:
+✓ pandas version: 2.2.3
+✓ plotly version: 6.0.1
+Date range: from 2025-04-03 to 2025-05-03
+Stock ID query returned 0 records
+Security ID query returned 18 records
+DataFrame columns: ['timestamp', 'date', 'open', 'high', 'low', 'close', 'volume']
+First few rows:
+    timestamp        date     open     high      low    close   volume
+0  1743618600  2025-04-03  1049.90  1075.25  1048.10  1071.00  1595000
+1  1743705000  2025-04-04  1065.45  1095.55  1062.90  1087.85  4089261
+2  1743964200  2025-04-07  1019.00  1077.70  1019.00  1047.35  3200820
+3  1744050600  2025-04-08  1056.00  1073.50  1044.75  1069.75  1444712
+4  1744137000  2025-04-09  1062.00  1092.95  1060.05  1089.75  2274161
+Saving chart to: charts/TATACONSUM_2025-04-03_2025-05-03.html
+Chart file created successfully
+Browser launched with URL: file://D:\AI\AI-Bot\charts\TATACONSUM_2025-04-03_2025-05-03.html

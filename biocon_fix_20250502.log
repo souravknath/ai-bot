@@ -1,0 +1,50 @@
+2025-05-02 17:38:39,002 - INFO - Starting BIOCON security ID fix
+2025-05-02 17:38:39,004 - INFO - Connected to database: stock_data.db
+2025-05-02 17:38:39,005 - INFO - Found BIOCON with ID 283 and security_id 3438
+2025-05-02 17:38:39,009 - INFO - Updated BIOCON security ID from 3438 to 40120
+2025-05-02 17:38:39,010 - INFO - Testing security ID: 40120
+2025-05-02 17:38:39,010 - INFO - Payload: {'securityId': '40120', 'exchangeSegment': 'NSE_EQ', 'instrument': 'EQUITY', 'fromDate': '2025-04-24', 'toDate': '2025-05-01', 'oi': False}
+2025-05-02 17:38:39,485 - INFO - Response status: 400
+2025-05-02 17:38:39,486 - ERROR - API call failed: 400 - {"errorType":"Input_Exception","errorCode":"DH-905","errorMessage":"Missing required fields, bad values for parameters etc."}
+2025-05-02 17:38:39,495 - WARNING - New security ID 40120 still doesn't work with the API
+2025-05-02 17:38:39,496 - INFO - Direct fix failed, trying common ID patterns...
+2025-05-02 17:38:39,508 - INFO - Testing security ID: 40120
+2025-05-02 17:38:39,508 - INFO - Payload: {'securityId': '40120', 'exchangeSegment': 'NSE_EQ', 'instrument': 'EQUITY', 'fromDate': '2025-04-24', 'toDate': '2025-05-01', 'oi': False}
+2025-05-02 17:38:39,956 - INFO - Response status: 400
+2025-05-02 17:38:39,957 - ERROR - API call failed: 400 - {"errorType":"Input_Exception","errorCode":"DH-905","errorMessage":"Missing required fields, bad values for parameters etc."}
+2025-05-02 17:38:40,985 - INFO - Testing security ID: 40121
+2025-05-02 17:38:40,986 - INFO - Payload: {'securityId': '40121', 'exchangeSegment': 'NSE_EQ', 'instrument': 'EQUITY', 'fromDate': '2025-04-24', 'toDate': '2025-05-01', 'oi': False}
+2025-05-02 17:38:41,442 - INFO - Response status: 400
+2025-05-02 17:38:41,442 - ERROR - API call failed: 400 - {"errorType":"Input_Exception","errorCode":"DH-905","errorMessage":"Missing required fields, bad values for parameters etc."}
+2025-05-02 17:38:42,468 - INFO - Testing security ID: 40122
+2025-05-02 17:38:42,468 - INFO - Payload: {'securityId': '40122', 'exchangeSegment': 'NSE_EQ', 'instrument': 'EQUITY', 'fromDate': '2025-04-24', 'toDate': '2025-05-01', 'oi': False}
+2025-05-02 17:38:42,968 - INFO - Response status: 400
+2025-05-02 17:38:42,968 - ERROR - API call failed: 400 - {"errorType":"Input_Exception","errorCode":"DH-905","errorMessage":"Missing required fields, bad values for parameters etc."}
+2025-05-02 17:38:43,991 - INFO - Testing security ID: 40130
+2025-05-02 17:38:43,992 - INFO - Payload: {'securityId': '40130', 'exchangeSegment': 'NSE_EQ', 'instrument': 'EQUITY', 'fromDate': '2025-04-24', 'toDate': '2025-05-01', 'oi': False}
+2025-05-02 17:38:44,455 - INFO - Response status: 400
+2025-05-02 17:38:44,455 - ERROR - API call failed: 400 - {"errorType":"Input_Exception","errorCode":"DH-905","errorMessage":"Missing required fields, bad values for parameters etc."}
+2025-05-02 17:38:45,494 - INFO - Testing security ID: 41120
+2025-05-02 17:38:45,494 - INFO - Payload: {'securityId': '41120', 'exchangeSegment': 'NSE_EQ', 'instrument': 'EQUITY', 'fromDate': '2025-04-24', 'toDate': '2025-05-01', 'oi': False}
+2025-05-02 17:38:45,935 - INFO - Response status: 400
+2025-05-02 17:38:45,936 - ERROR - API call failed: 400 - {"errorType":"Input_Exception","errorCode":"DH-905","errorMessage":"Missing required fields, bad values for parameters etc."}
+2025-05-02 17:38:46,979 - INFO - Testing security ID: 343801
+2025-05-02 17:38:46,980 - INFO - Payload: {'securityId': '343801', 'exchangeSegment': 'NSE_EQ', 'instrument': 'EQUITY', 'fromDate': '2025-04-24', 'toDate': '2025-05-01', 'oi': False}
+2025-05-02 17:38:47,403 - INFO - Response status: 400
+2025-05-02 17:38:47,404 - ERROR - API call failed: 400 - {"errorType":"Input_Exception","errorCode":"DH-905","errorMessage":"Missing required fields, bad values for parameters etc."}
+2025-05-02 17:38:48,422 - INFO - Testing security ID: 343802
+2025-05-02 17:38:48,423 - INFO - Payload: {'securityId': '343802', 'exchangeSegment': 'NSE_EQ', 'instrument': 'EQUITY', 'fromDate': '2025-04-24', 'toDate': '2025-05-01', 'oi': False}
+2025-05-02 17:38:48,927 - INFO - Response status: 400
+2025-05-02 17:38:48,927 - ERROR - API call failed: 400 - {"errorType":"Input_Exception","errorCode":"DH-905","errorMessage":"Missing required fields, bad values for parameters etc."}
+2025-05-02 17:38:49,965 - INFO - Testing security ID: 343810
+2025-05-02 17:38:49,966 - INFO - Payload: {'securityId': '343810', 'exchangeSegment': 'NSE_EQ', 'instrument': 'EQUITY', 'fromDate': '2025-04-24', 'toDate': '2025-05-01', 'oi': False}
+2025-05-02 17:38:50,445 - INFO - Response status: 400
+2025-05-02 17:38:50,446 - ERROR - API call failed: 400 - {"errorType":"Input_Exception","errorCode":"DH-905","errorMessage":"Missing required fields, bad values for parameters etc."}
+2025-05-02 17:38:51,466 - INFO - Testing security ID: 40178
+2025-05-02 17:38:51,467 - INFO - Payload: {'securityId': '40178', 'exchangeSegment': 'NSE_EQ', 'instrument': 'EQUITY', 'fromDate': '2025-04-24', 'toDate': '2025-05-01', 'oi': False}
+2025-05-02 17:38:51,905 - INFO - Response status: 400
+2025-05-02 17:38:51,906 - ERROR - API call failed: 400 - {"errorType":"Input_Exception","errorCode":"DH-905","errorMessage":"Missing required fields, bad values for parameters etc."}
+2025-05-02 17:38:52,931 - INFO - Testing security ID: 99999
+2025-05-02 17:38:52,932 - INFO - Payload: {'securityId': '99999', 'exchangeSegment': 'NSE_EQ', 'instrument': 'EQUITY', 'fromDate': '2025-04-24', 'toDate': '2025-05-01', 'oi': False}
+2025-05-02 17:38:53,350 - INFO - Response status: 400
+2025-05-02 17:38:53,351 - ERROR - API call failed: 400 - {"errorType":"Input_Exception","errorCode":"DH-905","errorMessage":"Missing required fields, bad values for parameters etc."}
