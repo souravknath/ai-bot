@@ -1,6 +1,8 @@
 import os
 import time
 import logging
+import sys
+import schedule
 from tqdm import tqdm
 from datetime import datetime, timedelta
 from db_handler import DatabaseHandler
@@ -126,11 +128,17 @@ def update_latest_stock_data():
             logging.warning(f"... and {len(failed_stocks) - 10} more")
     db.close()
 
+def run_scheduler():
+    schedule.every().day.at("15:20").do(update_latest_stock_data)
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
+
 if __name__ == "__main__":
     start_time = datetime.now()
     logging.info(f"Starting daily data update at {start_time}")
     
-    update_latest_stock_data()
+    run_scheduler()
     
     end_time = datetime.now()
     logging.info(f"Completed in {end_time - start_time}")

@@ -280,6 +280,12 @@ class AutoOrderPlacer:
         signal_gen = SignalGenerator()
         
         try:
+            # Make sure the database connection is established
+            if not signal_gen.conn:
+                if not signal_gen.connect_db():
+                    logging.error("Failed to connect to database in SignalGenerator")
+                    return []
+            
             # Get enabled symbols if any specified, otherwise use all stocks
             enabled_symbols = self.config.get("enabled_symbols", [])
             
@@ -308,7 +314,7 @@ class AutoOrderPlacer:
             return buy_signals
             
         except Exception as e:
-            logging.error(f"Error getting signal stocks: {e}")
+            logging.error(f"Error getting signal stocks: {e}", exc_info=True)
             return []
         finally:
             if signal_gen.conn:

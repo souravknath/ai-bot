@@ -1,0 +1,29 @@
+2025-05-05 13:27:11,409 - INFO - Auto order scheduler started
+2025-05-05 13:27:11,409 - INFO - Starting automated order system...
+2025-05-05 13:27:15,248 - INFO - Connected to database: stock_data.db
+2025-05-05 13:27:15,248 - INFO - Tables created successfully
+2025-05-05 13:27:15,443 - WARNING - AI signal enhancement modules not available: No module named 'ai_signal_generator'
+2025-05-05 13:27:15,443 - ERROR - Error getting signal stocks: 'NoneType' object has no attribute 'cursor'
+2025-05-05 13:27:15,443 - INFO - Database connection closed
+2025-05-05 13:27:15,443 - INFO - Automated order process completed
+2025-05-05 13:27:15,443 - INFO - Scheduler set up - will run daily at 8:30 AM and 4:30 PM
+2025-05-05 13:30:58,139 - INFO - Scheduler stopped by user
+2025-05-05 13:34:14,729 - INFO - Auto order scheduler started
+2025-05-05 13:34:14,729 - INFO - Starting automated order system...
+2025-05-05 13:34:15,500 - INFO - Connected to database: stock_data.db
+2025-05-05 13:34:15,500 - INFO - Tables created successfully
+2025-05-05 13:34:15,618 - WARNING - AI signal enhancement modules not available: No module named 'ai_signal_generator'
+2025-05-05 13:34:15,618 - ERROR - Error getting signal stocks: 'NoneType' object has no attribute 'cursor'
+2025-05-05 13:34:15,618 - INFO - Database connection closed
+2025-05-05 13:34:15,619 - INFO - Automated order process completed
+2025-05-05 13:34:15,619 - INFO - Scheduler set up - will run daily at 8:30 AM and 4:30 PM
+2025-05-05 13:36:02,606 - INFO - Scheduler stopped by user
+2025-05-05 15:56:58,579 - INFO - Auto order scheduler started
+2025-05-05 15:56:58,579 - INFO - Starting automated order system...
+2025-05-05 15:56:59,577 - INFO - Connected to database: stock_data.db
+2025-05-05 15:56:59,577 - INFO - Tables created successfully
+2025-05-05 15:56:59,819 - WARNING - AI signal enhancement modules not available: No module named 'ai_signal_generator'
+2025-05-05 15:56:59,819 - ERROR - Error getting signal stocks: 'NoneType' object has no attribute 'cursor'
+2025-05-05 15:56:59,819 - INFO - Database connection closed
+2025-05-05 15:56:59,821 - INFO - Automated order process completed
+2025-05-05 15:56:59,823 - INFO - Scheduler set up - will run daily at 8:30 AM and 4:30 PM

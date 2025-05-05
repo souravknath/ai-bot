@@ -11,6 +11,15 @@ import webbrowser
 from datetime import datetime, timedelta
 import argparse
 
+# Import AI signal components
+try:
+    from ai_enhanced_signals import AIEnhancedSignalGenerator
+    AI_AVAILABLE = True
+    logging.info("AI signal enhancement modules loaded successfully")
+except ImportError as e:
+    AI_AVAILABLE = False
+    logging.warning(f"AI signal enhancement modules not available: {str(e)}")
+
 # Set up logging
 logging.basicConfig(
     level=logging.INFO, 
@@ -23,6 +32,16 @@ class SignalGenerator:
         """Initialize the signal generator with database connection"""
         self.db_path = db_path
         self.conn = None
+        self.use_ai = AI_AVAILABLE
+        
+        # Initialize AI components if available
+        if self.use_ai:
+            try:
+                self.ai_signals = AIEnhancedSignalGenerator()
+                logging.info("AI signal generator initialized")
+            except Exception as e:
+                self.use_ai = False
+                logging.error(f"Failed to initialize AI components: {str(e)}")
         
     def connect_db(self):
         """Connect to the SQLite database"""
@@ -424,7 +443,114 @@ class SignalGenerator:
                 signals['combined_signal_desc'] = 'FRESH STRONG SELL'
             
         return signals
-    
+
+    def get_latest_ai_enhanced_signals(self, df, sentiment_analysis=None):
+        """Extract the latest signals including AI and sentiment data"""
+        if df is None or len(df) < 2:
+            return None
+            
+        # First get the traditional signals
+        signals = self.get_latest_signals(df)
+        if not signals:
+            return None
+            
+        # Get the most recent data point
+        latest = df.iloc[-1]
+        
+        # Add AI signal if available
+        if 'AI_Signal_Desc' in latest:
+            signals['ai_signal_desc'] = latest['AI_Signal_Desc']
+            signals['ai_signal_prob'] = latest.get('AI_Signal_Prob', 0.5)
+        elif 'ai_signal_desc' in latest:  # Alternative column name
+            signals['ai_signal_desc'] = latest['ai_signal_desc']
+            signals['ai_signal_prob'] = 0.5
+        else:
+            signals['ai_signal_desc'] = 'NEUTRAL'
+            signals['ai_signal_prob'] = 0.5
+            
+        # Add sentiment data if available
+        if sentiment_analysis:
+            signals['sentiment_desc'] = sentiment_analysis['sentiment_desc']
+            signals['sentiment_score'] = sentiment_analysis['sentiment_score']
+            signals['sentiment_confidence'] = sentiment_analysis.get('confidence', 0)
+        elif 'sentiment_desc' in latest and 'sentiment_score' in latest:
+            signals['sentiment_desc'] = latest['sentiment_desc']
+            signals['sentiment_score'] = latest['sentiment_score']
+            signals['sentiment_confidence'] = 0.5
+        else:
+            signals['sentiment_desc'] = 'NEUTRAL'
+            signals['sentiment_score'] = 0.5
+            signals['sentiment_confidence'] = 0
+            
+        # Generate an AI-enhanced comprehensive signal
+        self._add_ai_enhanced_signal(signals)
+        
+        return signals
+        
+    def _add_ai_enhanced_signal(self, signals):
+        """Add a comprehensive AI-enhanced signal combining all signal sources"""
+        # Weight for different signals
+        traditional_weight = 0.5
+        ai_weight = 0.3
+        sentiment_weight = 0.2
+        
+        # Traditional signal score (-2 to 2)
+        traditional_score = 0
+        if signals['combined_signal_desc'] == 'STRONG BUY':
+            traditional_score = 1
+        elif signals['combined_signal_desc'] == 'FRESH STRONG BUY':
+            traditional_score = 2
+        elif signals['combined_signal_desc'] == 'STRONG SELL':
+            traditional_score = -1
+        elif signals['combined_signal_desc'] == 'FRESH STRONG SELL':
+            traditional_score = -2
+            
+        # AI signal score (-2 to 2)
+        ai_score = 0
+        ai_signal = signals.get('ai_signal_desc', 'NEUTRAL')
+        ai_prob = signals.get('ai_signal_prob', 0.5)
+        
+        if ai_signal == 'AI BUY':
+            ai_score = 1 + (ai_prob - 0.7) * 3  # Scale from 1 to 2 based on confidence
+        elif ai_signal == 'AI SELL':
+            ai_score = -1 - (0.3 - ai_prob) * 3  # Scale from -1 to -2 based on confidence
+            
+        # Sentiment score (-2 to 2)
+        sentiment_score = 0
+        sentiment_desc = signals.get('sentiment_desc', 'NEUTRAL')
+        sentiment_confidence = signals.get('sentiment_confidence', 0)
+        
+        if sentiment_desc == 'BULLISH':
+            sentiment_score = 1 * sentiment_confidence  # Scale by confidence
+        elif sentiment_desc == 'STRONGLY BULLISH':
+            sentiment_score = 2 * sentiment_confidence
+        elif sentiment_desc == 'BEARISH':
+            sentiment_score = -1 * sentiment_confidence
+        elif sentiment_desc == 'STRONGLY BEARISH':
+            sentiment_score = -2 * sentiment_confidence
+            
+        # Calculate weighted final score
+        final_score = (traditional_weight * traditional_score + 
+                       ai_weight * ai_score + 
+                       sentiment_weight * sentiment_score)
+        
+        # Determine final signal description based on score
+        if final_score >= 1.2:
+            signals['ai_enhanced_signal'] = 'STRONG AI BUY'
+        elif final_score >= 0.6:
+            signals['ai_enhanced_signal'] = 'AI BUY'
+        elif final_score <= -1.2:
+            signals['ai_enhanced_signal'] = 'STRONG AI SELL'
+        elif final_score <= -0.6:
+            signals['ai_enhanced_signal'] = 'AI SELL'
+        else:
+            signals['ai_enhanced_signal'] = 'NEUTRAL'
+            
+        # Add score for reference
+        signals['ai_enhanced_score'] = round(final_score, 2)
+        
+        return signals
+        
     def print_signals_summary(self, signals_list):
         """Print a summary of signals for multiple stocks"""
         if not signals_list:
@@ -452,19 +578,69 @@ class SignalGenerator:
         if df is None:
             logging.error(f"Could not get data for {symbol or security_id}")
             return None
+
+        # If AI is available, use it to optimize parameters
+        optimal_params = {
+            'ma_period': 50,
+            'rsi_period': 14,
+            'rsi_threshold': 50
+        }
+        
+        if self.use_ai:
+            try:
+                # Get optimal parameters for this stock
+                logging.info(f"Using AI to optimize parameters for {symbol}")
+                optimal_params = self.ai_signals.optimize_parameters(df)
+            except Exception as e:
+                logging.error(f"Error optimizing parameters: {str(e)}")
+                # Continue with default parameters on error
             
-        # Generate signals
-        df_signals = self.generate_signals(df)
+        # Generate signals with optimal parameters
+        df_signals = self.generate_signals(
+            df, 
+            sma_period=optimal_params['ma_period'],
+            rsi_period=optimal_params['rsi_period'],
+            rsi_threshold=optimal_params['rsi_threshold']
+        )
+        
         if df_signals is None:
             logging.error(f"Could not generate signals for {symbol or security_id}")
             return None
-            
-        # Get latest signals
-        signals = self.get_latest_signals(df_signals)
+        
+        # If AI is available, enhance signals with AI predictions
+        sentiment_analysis = None
+        if self.use_ai:
+            try:
+                # Add AI predictions
+                df_signals = self.ai_signals.enhance_with_ai(df_signals, symbol)
+                
+                # Add sentiment analysis if symbol is provided
+                if symbol:
+                    df_signals, sentiment_analysis = self.ai_signals.add_sentiment_analysis(df_signals, symbol)
+            except Exception as e:
+                logging.error(f"Error enhancing signals with AI: {str(e)}")
+                # Continue without AI on error
+        
+        # Get latest signals (traditional or AI-enhanced)
+        if self.use_ai:
+            signals = self.get_latest_ai_enhanced_signals(df_signals, sentiment_analysis)
+        else:
+            signals = self.get_latest_signals(df_signals)
+        
+        # Save signals to database
+        self.save_signals_to_db(signals)
         
         # Create chart if requested
         if show_chart and symbol:
-            filename = self.create_signal_chart(df_signals, symbol)
+            if self.use_ai:
+                try:
+                    # Create AI-enhanced chart
+                    filename = self.ai_signals.create_ai_enhanced_chart(df_signals, symbol, sentiment_analysis)
+                except Exception as e:
+                    logging.error(f"Error creating AI-enhanced chart: {str(e)}. Falling back to traditional chart.")
+                    filename = self.create_signal_chart(df_signals, symbol)
+            else:
+                filename = self.create_signal_chart(df_signals, symbol)
             
             # Open the chart file in a browser
             if filename and os.path.exists(filename):
@@ -502,6 +678,110 @@ class SignalGenerator:
                 signals_list.append(signals)
                 
         return signals_list
+
+    def save_signals_to_db(self, signals):
+        """Save signals to the database
+        
+        Args:
+            signals: Dictionary containing signal data
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if not signals:
+            return False
+            
+        try:
+            # If AI components are available, use the AI signal generator to save
+            if self.use_ai and hasattr(self, 'ai_signals'):
+                return self.ai_signals.save_signal_to_db(signals)
+                
+            # Otherwise, save using standard method
+            if not self.conn:
+                if not self.connect_db():
+                    return False
+                    
+            cursor = self.conn.cursor()
+            
+            # Get stock_id for the symbol
+            cursor.execute("SELECT id FROM stocks WHERE symbol = ?", (signals.get('symbol'),))
+            result = cursor.fetchone()
+            
+            if not result:
+                logging.warning(f"Stock not found for symbol: {signals.get('symbol')}")
+                return False
+                
+            stock_id = result[0]
+            
+            # Check if this signal already exists for this date
+            cursor.execute(
+                "SELECT id FROM stock_signals WHERE symbol = ? AND signal_date = ?", 
+                (signals.get('symbol'), signals.get('date'))
+            )
+            
+            existing_signal = cursor.fetchone()
+            
+            # Prepare notes containing additional signal data
+            notes = f"MA: {signals.get('ma_signal_desc')}, RSI: {signals.get('rsi_signal_desc')}, "
+            notes += f"Price vs MA: {signals.get('price_vs_ma')}, RSI: {signals.get('rsi'):.2f}, "
+            notes += f"Change: {signals.get('change_percent'):.2f}%"
+            
+            # Prepare query parameters
+            params = (
+                stock_id,
+                signals.get('symbol'),
+                signals.get('date'),
+                signals.get('ma_signal_desc'),  # Using MA signal as the ai_signal
+                signals.get('confidence', 100) if 'confidence' in signals else 75,  # Default confidence
+                0.0,  # Default ai_score
+                signals.get('close'),
+                signals.get('rsi'),
+                signals.get('ma_50'),  # Using MA as sma20
+                0.0,  # Default sma50
+                signals.get('combined_signal', 0),
+                signals.get('combined_signal_desc'),
+                notes
+            )
+            
+            if existing_signal:
+                # Update existing signal
+                cursor.execute("""
+                    UPDATE stock_signals SET 
+                    stock_id = ?, 
+                    symbol = ?,
+                    signal_date = ?,
+                    generated_at = CURRENT_TIMESTAMP,
+                    ai_signal = ?,
+                    confidence = ?,
+                    ai_score = ?,
+                    close = ?,
+                    rsi = ?,
+                    sma20 = ?,
+                    sma50 = ?,
+                    combined_signal = ?,
+                    combined_signal_desc = ?,
+                    notes = ?
+                    WHERE id = ?
+                """, params + (existing_signal[0],))
+                
+                logging.info(f"Updated signal for {signals.get('symbol')} on {signals.get('date')}")
+            else:
+                # Insert new signal
+                cursor.execute("""
+                    INSERT INTO stock_signals (
+                        stock_id, symbol, signal_date, ai_signal, confidence, ai_score,
+                        close, rsi, sma20, sma50, combined_signal, combined_signal_desc, notes
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, params)
+                
+                logging.info(f"Inserted new signal for {signals.get('symbol')} on {signals.get('date')}")
+            
+            self.conn.commit()
+            return True
+            
+        except Exception as e:
+            logging.error(f"Error saving signals to database: {e}", exc_info=True)
+            return False
 
 def main():
     parser = argparse.ArgumentParser(description='Generate technical trading signals')

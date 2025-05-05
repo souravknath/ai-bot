@@ -1373,17 +1373,20 @@ class StockListApp:
         # Count of different signal types
         buy_signal_count = 0
         fresh_signal_count = 0
+        ai_signal_count = 0  # New counter for AI-enhanced signals
             
         # Add each stock with signals to the signals tab
         for symbol, signals in self.signals_data.items():
-            # Skip if not a strong buy signal
-            if signals.get('combined_signal_desc') != 'STRONG BUY' and signals.get('combined_signal_desc') != 'FRESH STRONG BUY':
+            # Skip if not a strong buy signal (including AI signals now)
+            if signals.get('combined_signal_desc') != 'STRONG BUY' and signals.get('combined_signal_desc') != 'FRESH STRONG BUY' and signals.get('ai_signal_desc') != 'AI BUY':
                 continue
                 
             # Count the signals
             buy_signal_count += 1
             if signals.get('combined_signal_desc') == 'FRESH STRONG BUY':
                 fresh_signal_count += 1
+            if signals.get('ai_signal_desc') == 'AI BUY':
+                ai_signal_count += 1
                 
             # Extract data from signals
             name = signals.get('name', 'Unknown')
@@ -1419,8 +1422,9 @@ class StockListApp:
         self.signals_tree.tag_configure('strong_buy', background='#90ee90')  # Light green
         self.signals_tree.tag_configure('fresh_buy', background='#00FF00')   # Brighter green for fresh signals
         
-        # Update the tab title to show the count
-        self.tab_view.tab("Signals").configure(text=f"Signals ({buy_signal_count}/{fresh_signal_count} fresh)")
+        # Update status bar with signal counts instead of trying to modify tab text
+        signal_status = f"Signals: {buy_signal_count} buy signals ({fresh_signal_count} fresh)"
+        self.status_var.set(signal_status)
     
     def sort_signals_column(self, col, reverse):
         """Sort treeview in signals tab by clicking on column headers"""

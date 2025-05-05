@@ -80,10 +80,10 @@ def main():
     run_scheduled_job()
     
     # Schedule to run at specified time (e.g., after market close)
-    schedule.every().day.at("16:30").do(run_scheduled_job)  # 4:30 PM
+    schedule.every().day.at("15:25").do(run_scheduled_job)  # 4:30 PM
     
     # Also run once in the morning before market open
-    schedule.every().day.at("08:30").do(run_scheduled_job)  # 8:30 AM
+    # schedule.every().day.at("08:30").do(run_scheduled_job)  # 8:30 AM
     
     logging.info("Scheduler set up - will run daily at 8:30 AM and 4:30 PM")
     
