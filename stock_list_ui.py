@@ -2,6 +2,7 @@ import customtkinter as ctk
 import sqlite3
 import logging
 import pandas as pd
+import json  # Add missing import for JSON handling
 from tkinter import ttk
 import tkinter as tk
 import plotly.graph_objects as go
@@ -12,6 +13,8 @@ from datetime import datetime, timedelta
 from stock_fetcher import StockFetcher
 # Import SignalGenerator class
 from generate_signals import SignalGenerator
+from screener_auto_order import fetch_screener_stocks
+from auto_order import AutoOrderPlacer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -103,17 +106,13 @@ class StockListApp:
         
         # Create tabs
         self.all_stocks_tab = self.tab_view.add("All Stocks")
-        self.signals_tab = self.tab_view.add("Signals")
         self.orders_tab = self.tab_view.add("Orders")
+        self.signals_tab = self.tab_view.add("Signals")  # New tab
         
         # Create treeview frame for All Stocks tab
         self.tree_frame = ctk.CTkFrame(self.all_stocks_tab)
         self.tree_frame.pack(fill="both", expand=True)
 
-        # Create treeview frame for Signals tab
-        self.signals_tree_frame = ctk.CTkFrame(self.signals_tab)
-        self.signals_tree_frame.pack(fill="both", expand=True)
-        
         # Create treeview frame for Orders tab
         self.orders_tree_frame = ctk.CTkFrame(self.orders_tab)
         self.orders_tree_frame.pack(fill="both", expand=True)
@@ -150,39 +149,8 @@ class StockListApp:
         self.tree.heading("rsi_signal", text="RSI Signal", command=lambda: self.sort_column("rsi_signal", False))
         self.tree.heading("combined_signal", text="Combined", command=lambda: self.sort_column("combined_signal", False))
         
-        # Create Treeview for Signals tab with focused columns
-        self.signals_tree = ttk.Treeview(self.signals_tree_frame, columns=(
-            "symbol", "name", "price", "ma_signal", "rsi_signal", "combined_signal", 
-            "ma_value", "rsi_value", "change_percent", "volume"))
-        
-        # Define columns for Signals tab
-        self.signals_tree.column("#0", width=0, stretch=False)  # Hide the first column
-        self.signals_tree.column("symbol", width=100, anchor="center")
-        self.signals_tree.column("name", width=200, anchor="w")
-        self.signals_tree.column("price", width=80, anchor="center")
-        self.signals_tree.column("ma_signal", width=80, anchor="center")
-        self.signals_tree.column("rsi_signal", width=80, anchor="center")
-        self.signals_tree.column("combined_signal", width=100, anchor="center")
-        self.signals_tree.column("ma_value", width=80, anchor="center")
-        self.signals_tree.column("rsi_value", width=80, anchor="center")
-        self.signals_tree.column("change_percent", width=80, anchor="center")
-        self.signals_tree.column("volume", width=100, anchor="center")
-        
-        # Define column headings for Signals tab
-        self.signals_tree.heading("symbol", text="Symbol", command=lambda: self.sort_signals_column("symbol", False))
-        self.signals_tree.heading("name", text="Name", command=lambda: self.sort_signals_column("name", False))
-        self.signals_tree.heading("price", text="Price", command=lambda: self.sort_signals_column("price", False))
-        self.signals_tree.heading("ma_signal", text="MA Signal", command=lambda: self.sort_signals_column("ma_signal", False))
-        self.signals_tree.heading("rsi_signal", text="RSI Signal", command=lambda: self.sort_signals_column("rsi_signal", False))
-        self.signals_tree.heading("combined_signal", text="Combined", command=lambda: self.sort_signals_column("combined_signal", False))
-        self.signals_tree.heading("ma_value", text="MA (50)", command=lambda: self.sort_signals_column("ma_value", False))
-        self.signals_tree.heading("rsi_value", text="RSI (14)", command=lambda: self.sort_signals_column("rsi_value", False))
-        self.signals_tree.heading("change_percent", text="Change %", command=lambda: self.sort_signals_column("change_percent", False))
-        self.signals_tree.heading("volume", text="Volume", command=lambda: self.sort_signals_column("volume", False))
-        
         # Add double-click binding for quick chart view
         self.tree.bind("<Double-1>", lambda event: self.view_chart())
-        self.signals_tree.bind("<Double-1>", lambda event: self.view_signal_chart_from_signals_tab())
         
         # Add scrollbars to All Stocks tab
         self.y_scrollbar = ttk.Scrollbar(self.tree_frame, orient="vertical", command=self.tree.yview)
@@ -193,16 +161,6 @@ class StockListApp:
         self.y_scrollbar.pack(side="right", fill="y")
         self.x_scrollbar.pack(side="bottom", fill="x")
         self.tree.pack(fill="both", expand=True)
-        
-        # Add scrollbars to Signals tab
-        self.signals_y_scrollbar = ttk.Scrollbar(self.signals_tree_frame, orient="vertical", command=self.signals_tree.yview)
-        self.signals_x_scrollbar = ttk.Scrollbar(self.signals_tree_frame, orient="horizontal", command=self.signals_tree.xview)
-        self.signals_tree.configure(yscrollcommand=self.signals_y_scrollbar.set, xscrollcommand=self.signals_x_scrollbar.set)
-        
-        # Pack scrollbars and treeview for Signals tab
-        self.signals_y_scrollbar.pack(side="right", fill="y")
-        self.signals_x_scrollbar.pack(side="bottom", fill="x")
-        self.signals_tree.pack(fill="both", expand=True)
         
         # Create Treeview for Orders tab
         self.orders_tree = ttk.Treeview(self.orders_tree_frame, columns=(
@@ -245,6 +203,28 @@ class StockListApp:
         self.orders_x_scrollbar.pack(side="bottom", fill="x")
         self.orders_tree.pack(fill="both", expand=True)
         
+        # Create treeview frame for Signals tab
+        self.signals_tree_frame = ctk.CTkFrame(self.signals_tab)
+        self.signals_tree_frame.pack(fill="both", expand=True)
+        
+        # Create Treeview for Screener signals
+        self.signals_tree = ttk.Treeview(self.signals_tree_frame, columns=("symbol", "name", "cmp"))
+        self.signals_tree.column("#0", width=0, stretch=False)
+        self.signals_tree.column("symbol", width=100, anchor="center")
+        self.signals_tree.column("name", width=200, anchor="w")
+        self.signals_tree.column("cmp", width=100, anchor="center")
+        self.signals_tree.heading("symbol", text="Symbol")
+        self.signals_tree.heading("name", text="Name")
+        self.signals_tree.heading("cmp", text="CMP")
+        self.signals_tree.pack(fill="both", expand=True)
+        
+        # Add refresh button for signals
+        self.refresh_signals_btn = ctk.CTkButton(self.signals_tab, text="Refresh Signals", command=self.load_screener_signals)
+        self.refresh_signals_btn.pack(pady=10)
+        # Add Place Auto Orders button
+        self.place_orders_btn = ctk.CTkButton(self.signals_tab, text="Place Auto Orders for Screener Stocks", command=self.place_auto_orders_for_screener)
+        self.place_orders_btn.pack(pady=10)
+        
         # Status bar at bottom
         self.bottom_frame = ctk.CTkFrame(self.main_frame, height=30)
         self.bottom_frame.pack(fill="x", pady=(0, 5))
@@ -281,6 +261,19 @@ class StockListApp:
         
         # Load data initially
         self.load_data()
+        # Load Screener signals initially
+        self.load_screener_signals()
+        
+        # Show broker setting in status bar
+        try:
+            from db_handler import DatabaseHandler
+            db = DatabaseHandler()
+            if db.connect():
+                db.set_setting('broker', 'dhan', 'Broker to use for trading (demo, dhan, zerodha, etc)')
+                broker = db.get_all_settings().get('broker', 'demo')
+                self.status_var.set(f"Current broker: {broker}")
+        except Exception:
+            pass
     
     def load_data(self):
         """Load all stock data from the database"""
@@ -658,14 +651,10 @@ class StockListApp:
             # Update the treeview with signal data
             self.update_treeview_with_signals()
             
-            # Update the signals tab with the new data
-            self.update_signals_tab()
-            
             # Auto-switch to signals tab if we found buy signals
             buy_signals = [s for s in self.signals_data.values() if s.get('combined_signal_desc') == 'STRONG BUY']
             if buy_signals:
-                self.tab_view.set("Signals")
-                self.status_var.set(f"Found {len(buy_signals)} buy signals! Switched to Signals tab")
+                self.status_var.set(f"Found {len(buy_signals)} buy signals!")
             else:
                 self.status_var.set(f"Generated signals for {len(signals_list)} stocks - No buy signals found")
             
@@ -837,7 +826,7 @@ class StockListApp:
         """Show the context menu on right-click"""
         # Select the item that was right-clicked first
         item_id = self.tree.identify_row(event.y)
-        if item_id:
+        if (item_id):
             # First select the item
             self.tree.selection_set(item_id)
             # Then show the context menu
@@ -1359,132 +1348,6 @@ class StockListApp:
             # Show error dialog
             tk.messagebox.showerror("Error", error_msg)
 
-    def update_signals_tab(self):
-        """Update the signals tab with all available signal data"""
-        # Clear current display
-        for item in self.signals_tree.get_children():
-            self.signals_tree.delete(item)
-            
-        # Check if we have any signals data
-        if not self.signals_data:
-            ctk.CTkLabel(self.signals_tree_frame, text="No signals generated yet. Click 'Generate Signals' to analyze stocks.").place(relx=0.5, rely=0.5, anchor="center")
-            return
-            
-        # Count of different signal types
-        buy_signal_count = 0
-        fresh_signal_count = 0
-        ai_signal_count = 0  # New counter for AI-enhanced signals
-            
-        # Add each stock with signals to the signals tab
-        for symbol, signals in self.signals_data.items():
-            # Skip if not a strong buy signal (including AI signals now)
-            if signals.get('combined_signal_desc') != 'STRONG BUY' and signals.get('combined_signal_desc') != 'FRESH STRONG BUY' and signals.get('ai_signal_desc') != 'AI BUY':
-                continue
-                
-            # Count the signals
-            buy_signal_count += 1
-            if signals.get('combined_signal_desc') == 'FRESH STRONG BUY':
-                fresh_signal_count += 1
-            if signals.get('ai_signal_desc') == 'AI BUY':
-                ai_signal_count += 1
-                
-            # Extract data from signals
-            name = signals.get('name', 'Unknown')
-            price = signals.get('close', 0)
-            ma_signal = signals.get('ma_signal_desc', 'NEUTRAL')
-            rsi_signal = signals.get('rsi_signal_desc', 'NEUTRAL')
-            combined_signal = signals.get('combined_signal_desc', 'NEUTRAL')
-            ma_value = signals.get('ma_50', 0)
-            rsi_value = signals.get('rsi', 0)
-            change_percent = signals.get('change_percent', 0)
-            volume = signals.get('volume', 0)
-            
-            # Format the values
-            price_str = f"{price:.2f}" if price else "N/A"
-            ma_value_str = f"{ma_value:.2f}" if ma_value else "N/A"
-            rsi_value_str = f"{rsi_value:.2f}" if rsi_value else "N/A"
-            change_percent_str = f"{change_percent:.2f}%" if change_percent else "N/A"
-            volume_str = f"{volume:,}" if volume else "N/A"
-            
-            # Insert into signals tree
-            item_id = self.signals_tree.insert("", "end", values=(
-                symbol, name, price_str, ma_signal, rsi_signal, combined_signal,
-                ma_value_str, rsi_value_str, change_percent_str, volume_str
-            ))
-            
-            # Apply color coding based on signal strength
-            if signals.get('combined_signal_desc') == 'FRESH STRONG BUY':
-                self.signals_tree.item(item_id, tags=('fresh_buy',))
-            else:
-                self.signals_tree.item(item_id, tags=('strong_buy',))
-            
-        # Configure tag colors for signals tab
-        self.signals_tree.tag_configure('strong_buy', background='#90ee90')  # Light green
-        self.signals_tree.tag_configure('fresh_buy', background='#00FF00')   # Brighter green for fresh signals
-        
-        # Update status bar with signal counts instead of trying to modify tab text
-        signal_status = f"Signals: {buy_signal_count} buy signals ({fresh_signal_count} fresh)"
-        self.status_var.set(signal_status)
-    
-    def sort_signals_column(self, col, reverse):
-        """Sort treeview in signals tab by clicking on column headers"""
-        data_list = [(self.signals_tree.set(k, col), k) for k in self.signals_tree.get_children('')]
-        
-        try:
-            # Try to sort numerically if possible
-            # Remove formatting characters like commas, % signs
-            clean_data = []
-            for val, k in data_list:
-                if "%" in val:
-                    clean_data.append((float(val.rstrip("%")), k))
-                elif "," in val:
-                    clean_data.append((float(val.replace(",", "")), k))
-                else:
-                    try:
-                        clean_data.append((float(val), k))
-                    except ValueError:
-                        clean_data.append((val.lower(), k))  # Sort strings case-insensitive
-                        
-            clean_data.sort(reverse=reverse)
-            data_list = clean_data
-        except ValueError:
-            # Otherwise sort as string
-            data_list.sort(key=lambda x: x[0].lower(), reverse=reverse)
-        
-        # Rearrange items in sorted positions
-        for index, (val, k) in enumerate(data_list):
-            self.signals_tree.move(k, '', index)
-        
-        # Reverse sort next time
-        self.signals_tree.heading(col, command=lambda: self.sort_signals_column(col, not reverse))
-    
-    def view_signal_chart_from_signals_tab(self):
-        """View technical signal chart for the selected stock in signals tab"""
-        selection = self.signals_tree.selection()
-        if not selection:
-            self.status_var.set("Please select a stock first")
-            return
-            
-        stock_data = self.signals_tree.item(selection[0])['values']
-        symbol = stock_data[0] if len(stock_data) > 0 else None
-        
-        if not symbol:
-            self.status_var.set("Invalid stock data")
-            return
-            
-        self.status_var.set(f"Generating signal chart for {symbol}...")
-        self.root.update()
-        
-        # Generate signal chart
-        signals = self.signal_generator.analyze_stock(symbol=symbol, days=100, show_chart=True)
-        
-        if signals:
-            self.status_var.set(f"Generated signal chart for {symbol}")
-            # Update our stored signals data
-            self.signals_data[symbol] = signals
-        else:
-            self.status_var.set(f"Could not generate signal chart for {symbol}")
-
     def load_orders(self):
         """Load order data from order history file and display in Orders tab"""
         # Clear current display
@@ -1493,7 +1356,6 @@ class StockListApp:
         
         try:
             # Load the order history from JSON file
-            import json
             from pathlib import Path
             
             order_history_file = Path("order_history.json")
@@ -1555,10 +1417,16 @@ class StockListApp:
             self.orders_tree.tag_configure('rejected', background='#ffcccb')  # Light red
             self.orders_tree.tag_configure('pending', background='#add8e6')  # Light blue
             
-            # Update tab title with count of orders
+            # Count active orders
             active_orders = sum(1 for order in order_history.get("orders", []) 
                               if order.get("status") in ["filled", "simulated", "open"])
-            self.tab_view.tab("Orders").configure(text=f"Orders ({active_orders})")
+            
+            # CustomTkinter's TabView doesn't support setting tab text directly
+            # Instead we'll update the tab title by accessing the tab directly
+            # self.tab_view.set("Orders", f"Orders ({active_orders})")
+            
+            # Just log the active orders count instead of trying to modify tab title
+            logging.info(f"Active orders: {active_orders}")
             
             logging.info(f"Loaded {len(order_history.get('orders', []))} orders from order history")
             
@@ -1668,6 +1536,218 @@ class StockListApp:
             self.signals_data[symbol] = signals
         else:
             self.status_var.set(f"Could not generate signal chart for {symbol}")
+
+    def load_screener_signals(self):
+        """Fetch and display all Screener table data in the Signals tab, including Security ID from the stocks table by matching with name and symbol columns (robust normalization, two-way substring, acronym)"""
+        import re
+        def normalize(s):
+            if not s:
+                return ''
+            return re.sub(r'[^A-Z0-9]', '', str(s).upper())
+        def acronym(s):
+            if not s:
+                return ''
+            return ''.join(word[0] for word in re.findall(r'\b\w', s.upper()))
+        try:
+            result = fetch_screener_stocks()
+            headers = result.get('headers', [])
+            rows = result.get('rows', [])
+            if 'Security ID' not in headers:
+                headers.insert(1, 'Security ID')
+            for col in self.signals_tree['columns']:
+                self.signals_tree.heading(col, text='')
+                self.signals_tree.column(col, width=0)
+            self.signals_tree['columns'] = headers
+            for col in headers:
+                self.signals_tree.heading(col, text=col)
+                self.signals_tree.column(col, width=120, anchor="center")
+            self.signals_tree.delete(*self.signals_tree.get_children())
+            if not rows:
+                self.status_var.set("No Screener signals found.")
+                return
+            # Build normalized name/symbol -> security_id mapping, and acronym -> security_id
+            key_to_secid = {}
+            acronym_to_secid = {}
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute("SELECT name, symbol, security_id FROM stocks")
+                for name, symbol, secid in cursor.fetchall():
+                    norm_name = normalize(name)
+                    norm_symbol = normalize(symbol)
+                    key_to_secid[norm_name] = secid
+                    key_to_secid[norm_symbol] = secid
+                    acronym_to_secid[acronym(name)] = secid
+                    acronym_to_secid[acronym(symbol)] = secid
+            except Exception:
+                pass
+            for row in rows:
+                screener_name = row.get('Name') or row.get('name')
+                screener_symbol = row.get('Symbol') or row.get('symbol')
+                norm_screener_name = normalize(screener_name)
+                norm_screener_symbol = normalize(screener_symbol)
+                screener_acronym = acronym(screener_name)
+                secid = ''
+                # Try direct match
+                if norm_screener_name and norm_screener_name in key_to_secid:
+                    secid = key_to_secid[norm_screener_name]
+                elif norm_screener_symbol and norm_screener_symbol in key_to_secid:
+                    secid = key_to_secid[norm_screener_symbol]
+                # Two-way substring match
+                if not secid:
+                    for db_key, db_secid in key_to_secid.items():
+                        if (norm_screener_name and (norm_screener_name in db_key or db_key in norm_screener_name)) or \
+                           (norm_screener_symbol and (norm_screener_symbol in db_key or db_key in norm_screener_symbol)):
+                            secid = db_secid
+                            break
+                # Acronym match
+                if not secid and screener_acronym:
+                    secid = acronym_to_secid.get(screener_acronym, '')
+                values = []
+                for col in headers:
+                    if col == 'Security ID':
+                        values.append(secid)
+                    else:
+                        values.append(row.get(col, ''))
+                self.signals_tree.insert("", "end", values=values)
+            self.status_var.set(f"Loaded {len(rows)} Screener signals.")
+        except Exception as e:
+            self.status_var.set(f"Error loading Screener signals: {e}")
+
+    def place_auto_orders_for_screener(self):
+        import logging
+        import re
+        print("place_auto_orders_for_screener called")
+        logging.info("place_auto_orders_for_screener called")
+        try:
+            result = fetch_screener_stocks()
+            print(f"Fetched screener stocks: {result}")
+            rows = result.get('rows', [])
+            if not rows:
+                print("No Screener stocks to place orders for.")
+                self.status_var.set("No Screener stocks to place orders for.")
+                return
+            auto_order = AutoOrderPlacer()
+            placed = 0
+            skipped = 0
+            
+            for row in rows:
+                # Try to find symbol in various fields
+                name_keys = ['Name', 'name', 'Company', 'company']
+                symbol_keys = ['Symbol', 'symbol', 'NSE Symbol', 'BSE Symbol', 'Ticker']
+                
+                # First try to get symbol from symbol fields
+                symbol = None
+                for key in symbol_keys:
+                    if key in row and row[key]:
+                        symbol = row[key]
+                        break
+                
+                # If no symbol found, try name fields
+                if not symbol:
+                    for key in name_keys:
+                        if key in row and row[key]:
+                            symbol = row[key]
+                            break
+                
+                # Try to find price in various fields
+                price_found = False
+                cmp_val = None
+                
+                # Look for price in dedicated price fields
+                price_keys = ['CMPRs.', 'cmp', 'Current Price', 'Price', 'LTP', 'Last Price']
+                for key in price_keys:
+                    if key in row and row[key]:
+                        try:
+                            price_text = str(row[key])
+                            # Extract numeric part using regex
+                            price_match = re.search(r'(\d+[,.]?\d*)', price_text)
+                            if price_match:
+                                price_value = price_match.group(1).replace(',', '')
+                                cmp_val = float(price_value)
+                                price_found = True
+                                break
+                        except Exception as e:
+                            print(f"Error extracting price from {key}: {e}")
+                
+                # If no price found, try to find in any numeric column
+                if not price_found:
+                    # First try to find price in dedicated price fields, prioritizing "CMPRs."
+                    price_keys = ['CMPRs.', 'CMP Rs.', 'cmp', 'Current Price', 'Price', 'LTP', 'Last Price']
+                    for key in price_keys:
+                        if key in row and row[key]:
+                            try:
+                                price_text = str(row[key])
+                                # Extract numeric part using regex
+                                price_match = re.search(r'(\d+[,.]?\d*)', price_text)
+                                if price_match:
+                                    price_value = price_match.group(1).replace(',', '')
+                                    cmp_val = float(price_value)
+                                    price_found = True
+                                    break
+                            except Exception as e:
+                                logging.error(f"Error extracting price from {key}: {e}")
+                    
+                    # If still no price found, try to find in any numeric column
+                    if not price_found:
+                        for key, value in row.items():
+                            # Skip non-price-like fields and explicitly exclude S.No. column
+                            if key in ['S.No.', 'S No', 'Sr.', 'Sr No', 'Serial', '#'] or any(skip_word in key.lower() for skip_word in ['date', 'year', 'volume', 'quantity', 'no.', 'sl.', 'sl no', 'serial']):
+                                continue
+                            try:
+                                if value:
+                                    price_match = re.search(r'(\d+[,.]?\d*)', str(value))
+                                    if price_match:
+                                        price_value = price_match.group(1).replace(',', '')
+                                        price = float(price_value)
+                                        # Sanity check for price range - most Indian stocks are between 10 and 50,000
+                                        if 10 <= price <= 50000:  # Adjusted price range for more realistic stock prices
+                                            cmp_val = price
+                                            price_found = True
+                                            logging.info(f"Found price {price} in column {key}")
+                                            break
+                            except Exception:
+                                continue
+                
+                print(f"Preparing to place order for symbol: {symbol}, cmp: {cmp_val}")
+                
+                if symbol and cmp_val:
+                    confirmed = {
+                        'symbol': symbol,
+                        'entry_price': cmp_val,
+                        'signal_price': cmp_val,
+                        'date': None
+                    }
+                    try:
+                        order_params = auto_order.calculate_order_params(confirmed)
+                        print(f"Order params: {order_params}")
+                        if order_params['position_size'] <= 0:
+                            print(f"Skipping order: position size is zero for {symbol}")
+                            skipped += 1
+                            continue
+                        result = auto_order.place_order(order_params)
+                        print(f"Order result: {result}")
+                        if result.get('success'):
+                            placed += 1
+                        else:
+                            print(f"Order placement failed for {symbol}: {result.get('message')}")
+                            skipped += 1
+                    except Exception as e:
+                        print(f"Error calculating/placing order for {symbol}: {e}")
+                        logging.error(f"Error calculating/placing order for {symbol}: {e}")
+                        skipped += 1
+                else:
+                    print(f"Skipping order: missing symbol or cmp. symbol={symbol}, cmp={cmp_val}")
+                    skipped += 1
+                    
+            status_message = f"Placed auto orders for {placed} Screener stocks. Skipped {skipped} stocks."
+            print(status_message)
+            self.status_var.set(status_message)
+            self.load_orders()
+        except Exception as e:
+            error_msg = f"Error placing auto orders: {e}"
+            print(error_msg)
+            logging.error(error_msg, exc_info=True)
+            self.status_var.set(error_msg)
 
 if __name__ == "__main__":
     root = ctk.CTk()

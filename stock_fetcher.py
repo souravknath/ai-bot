@@ -19,10 +19,17 @@ class StockFetcher:
         """Initialize the StockFetcher with API details"""
         self.api_base_url = "https://api.dhan.co/v2"
         
-        # Get API key from environment variable
-        self.api_key = os.getenv("DHAN_API_KEY")
+        # Database connection
+        self.db = DatabaseHandler()
+        self.db.connect()
+        
+        # Get API key from settings table first, fall back to environment variable
+        self.api_key = self.get_access_token_from_settings()
         if not self.api_key:
-            logging.warning("API key not found in environment variables. Set DHAN_API_KEY in .env file.")
+            logging.warning("API key not found in settings table. Falling back to environment variable.")
+            self.api_key = os.getenv("DHAN_API_KEY")
+            if not self.api_key:
+                logging.warning("API key not found in environment variables. Set DHAN_API_KEY in .env file or update settings table.")
         
         # Headers for API requests
         self.headers = {
@@ -35,9 +42,22 @@ class StockFetcher:
         self.exchange_segments = ["NSE_EQ"]  # Can add more like "BSE_EQ", "NSE_FNO", etc.
         self.instrument_types = ["EQUITY"]   # Can add more like "FUTURES", "OPTION", etc.
         
-        # Database connection
-        self.db = DatabaseHandler()
-        self.db.connect()
+    def get_access_token_from_settings(self):
+        """Get the Dhan access token from the settings table"""
+        if not self.db or not self.db.conn:
+            return None
+            
+        try:
+            # Get api_secret (new standard key name)
+            api_secret = self.db.get_setting('api_secret')
+            if api_secret:
+                return api_secret
+                
+            # For backward compatibility - this should be removed after migration is complete
+            return self.db.get_setting('dhan_access_token')
+        except Exception as e:
+            logging.error(f"Error retrieving API token from settings: {e}")
+            return None
     
     def fetch_stock_list(self, max_stocks=2000):
         """

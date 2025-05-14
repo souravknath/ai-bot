@@ -129,7 +129,7 @@ def update_latest_stock_data():
     db.close()
 
 def run_scheduler():
-    schedule.every().day.at("15:20").do(update_latest_stock_data)
+    schedule.every().day.at("21:10").do(update_latest_stock_data)
     while True:
         schedule.run_pending()
         time.sleep(1)

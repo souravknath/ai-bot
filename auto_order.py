@@ -63,6 +63,12 @@ class AutoOrderPlacer:
                 
             # Save all default settings to database
             self.save_config_to_db(config)
+        else:
+            # Make sure api_secret is properly retrieved from database
+            api_secret = self.db.get_setting('api_secret')
+            if api_secret:
+                config['api_secret'] = api_secret
+                logging.info("Successfully loaded API secret from settings table")
                 
         # Load watchlist
         config['enabled_symbols'] = self.db.get_watchlist()
@@ -92,7 +98,7 @@ class AutoOrderPlacer:
         # Default configuration
         default_config = {
             "api_key": "",  # API key for broker integration
-            "api_secret": "",  # API secret for broker integration
+            "api_secret": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzQ4NDE5MTIyLCJ0b2tlbkNvbnN1bWVyVHlwZSI6IlNFTEYiLCJ3ZWJob29rVXJsIjoiIiwiZGhhbkNsaWVudElkIjoiMTEwMTY1Nzk4NCJ9.mdqgKkG2brOROTZwbmjtgdMylrQ0xtLTKhA23RqrRVSlaiN9uc_VZTPt1Te5DPi7G2GT3QePBgr_kKYsVbbMhw",  # API secret for broker integration (was dhan_access_token)
             "broker": "demo",  # 'demo', 'dhan', or other broker name
             "capital_per_trade": 10000,  # Amount to invest per trade
             "max_positions": 5,  # Maximum number of concurrent positions
@@ -106,7 +112,6 @@ class AutoOrderPlacer:
             "notification_email": "",  # Email for notifications
             # Dhan-specific settings
             "dhan_client_id": "1101657984",  # Dhan client ID
-            "dhan_access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzQ2NTI2MTY2LCJ0b2tlbkNvbnN1bWVyVHlwZSI6IlNFTEYiLCJ3ZWJob29rVXJsIjoiIiwiZGhhbkNsaWVudElkIjoiMTEwMTY1Nzk4NCJ9.ixEQrTtTSJN3bwaiD4wBNw43lmh1TavJDG-cbAoGXnWx1bI9NUo48cplHaMmwd7K6XhVy01wrIVDbyHR-Lbf6g",  # Dhan access token
             "dhan_api_url": "https://api.dhan.co/v2",  # Dhan API URL
             "dhan_product_type": "CNC",  # CNC, INTRADAY, MARGIN, MTF
             "dhan_trailing_jump": 10  # Price jump for trailing stop loss
@@ -123,7 +128,7 @@ class AutoOrderPlacer:
         descriptions = {
             "broker": "Broker to use for trading (demo, dhan, zerodha, etc)",
             "api_key": "API key for broker integration",
-            "api_secret": "API secret for broker integration",
+            "api_secret": "API secret for broker integration (Dhan access token)",
             "capital_per_trade": "Amount to invest per trade in currency units",
             "max_positions": "Maximum number of concurrent positions",
             "stop_loss_percent": "Stop loss percentage",
@@ -135,7 +140,6 @@ class AutoOrderPlacer:
             "time_in_force": "Time in force for orders (DAY, GTC, etc)",
             "notification_email": "Email for notifications",
             "dhan_client_id": "Dhan client ID",
-            "dhan_access_token": "Dhan access token",
             "dhan_api_url": "Dhan API URL",
             "dhan_product_type": "Dhan product type (CNC, INTRADAY, MARGIN, MTF)",
             "dhan_trailing_jump": "Price jump for trailing stop loss"
@@ -389,6 +393,8 @@ class AutoOrderPlacer:
     
     def place_order(self, order_params):
         """Place an order with the broker (or simulate if demo)"""
+        logging.info(f"Attempting to place order: {json.dumps(order_params)}")
+        logging.info(f"Current broker: {self.config.get('broker')}")
         if self.config.get('broker') == 'demo':
             # Simulate order placement in demo mode
             logging.info(f"DEMO ORDER: {json.dumps(order_params)}")
@@ -418,6 +424,8 @@ class AutoOrderPlacer:
                 'message': "Demo order simulated successfully"
             }
         elif self.config.get('broker') == 'dhan':
+            # Log before calling Dhan
+            logging.info("Calling place_dhan_super_order...")
             return self.place_dhan_super_order(order_params)
         else:
             # Implement other broker integration here
@@ -434,7 +442,7 @@ class AutoOrderPlacer:
             
             # Check if required settings are available
             dhan_client_id = self.config.get('dhan_client_id')
-            access_token = self.config.get('dhan_access_token')
+            access_token = self.config.get('api_secret')
             api_url = self.config.get('dhan_api_url')
             
             # For Dhan we don't require api_key, only access_token
@@ -448,82 +456,182 @@ class AutoOrderPlacer:
                 logging.error(f"Security ID not found for {order_params['symbol']}")
                 return {'success': False, 'message': f"Security ID not found for {order_params['symbol']}"}
             
-            # Prepare the super order request
-            super_order_endpoint = f"{api_url}/super/orders"
-            
-            # Set up the headers
-            headers = {
-                'Content-Type': 'application/json',
-                'access-token': access_token
-            }
-            
             # Determine order price based on order type
             price = order_params['limit_price'] if order_params['order_type'] == 'LIMIT' else None
             
             # Determine trailing stop loss settings
             trailing_jump = self.config.get('dhan_trailing_jump', 10)
             
-            # Prepare the payload
-            payload = {
-                'dhanClientId': dhan_client_id,
-                'correlationId': f"auto_{datetime.now().strftime('%Y%m%d%H%M%S')}",
-                'transactionType': 'BUY',
-                'exchangeSegment': self.get_dhan_exchange_segment(order_params['symbol']),
-                'productType': self.config.get('dhan_product_type', 'CNC'),
-                'orderType': order_params['order_type'],
-                'securityId': security_id,
-                'quantity': order_params['position_size'],
-                'price': str(price) if price else None,
-                'targetPrice': str(order_params['target']),
-                'stopLossPrice': str(order_params['stop_loss']),
-                'trailingJump': trailing_jump
-            }
+            # Create a unique correlation ID
+            correlation_id = f"auto_{datetime.now().strftime('%Y%m%d%H%M%S')}"
             
-            # Remove None values from payload
-            payload = {k: v for k, v in payload.items() if v is not None}
+            # Log the parameters for debugging
+            logging.info(f"Security ID: {security_id}")
+            logging.info(f"Order type: {order_params['order_type']}")
+            logging.info(f"Quantity: {order_params['position_size']}")
+            logging.info(f"Price: {price}")
+            logging.info(f"Stop loss: {order_params['stop_loss']}")
+            logging.info(f"Target: {order_params['target']}")
             
-            logging.info(f"Dhan Super Order payload: {json.dumps(payload)}")
-            
-            # Make the API request
-            response = requests.post(super_order_endpoint, headers=headers, json=payload)
-            
-            # Check if the request was successful
-            if response.status_code == 200:
-                response_data = response.json()
-                logging.info(f"Dhan Super Order placed successfully: {response_data}")
+            # Use the direct http.client approach as in the working example
+            try:
+                import http.client
                 
-                # Prepare order record
-                order = {
-                    'symbol': order_params['symbol'],
+                logging.info("Using direct HTTP client implementation")
+                conn = http.client.HTTPSConnection("api.dhan.co")
+                
+                # Format the payload exactly as in the working example
+                payload_dict = {
+                    "dhanClientId": dhan_client_id,
+                    "correlationId": correlation_id,
+                    "transactionType": "BUY",
+                    "exchangeSegment": self.get_dhan_exchange_segment(order_params['symbol']),
+                    "productType": self.config.get('dhan_product_type', 'CNC'),
+                    "orderType": order_params['order_type'],
+                    "securityId": security_id,
+                    "quantity": order_params['position_size'],
+                    "price": price,
+                    "targetPrice": str(order_params['target']),
+                    "stopLossPrice": str(order_params['stop_loss']),
+                    "trailingJump": trailing_jump
+                }
+                
+                # Remove None values from payload
+                payload_dict = {k: v for k, v in payload_dict.items() if v is not None}
+                
+                payload = json.dumps(payload_dict)
+                logging.info(f"Payload prepared: {payload}")
+                
+                headers = {
+                    'Content-Type': 'application/json',
+                    'access-token': access_token
+                }
+                
+                logging.info("Making direct HTTP request to Dhan API")
+                conn.request("POST", "/v2/super/orders", payload, headers)
+                res = conn.getresponse()
+                data = res.read()
+                response_text = data.decode("utf-8")
+                
+                logging.info(f"Response status: {res.status}")
+                logging.info(f"Response body: {response_text}")
+                
+                if res.status == 200:
+                    response_data = json.loads(response_text)
+                    logging.info(f"Dhan Super Order placed successfully: {response_data}")
+                    
+                    # Prepare order record
+                    order = {
+                        'symbol': order_params['symbol'],
+                        'quantity': order_params['position_size'],
+                        'price': order_params['current_price'] if order_params['order_type'] == 'MARKET' else order_params['limit_price'],
+                        'order_type': order_params['order_type'],
+                        'stop_loss': order_params['stop_loss'],
+                        'target': order_params['target'],
+                        'status': 'open',
+                        'timestamp': datetime.now().isoformat(),
+                        'broker': 'dhan',
+                        'order_id': response_data.get('orderId'),
+                        'security_id': security_id,
+                        'trailing_jump': trailing_jump
+                    }
+                    
+                    # Add to order history
+                    self.order_history['orders'].append(order)
+                    self.save_order_history()
+                    
+                    return {
+                        'success': True,
+                        'order_id': response_data.get('orderId'),
+                        'message': "Dhan Super Order placed successfully"
+                    }
+                else:
+                    logging.error(f"Failed to place Dhan Super Order: {response_text}")
+                    return {
+                        'success': False,
+                        'status_code': res.status,
+                        'message': f"Failed to place Dhan Super Order: {response_text}"
+                    }
+            except Exception as req_error:
+                logging.error(f"HTTP client error: {req_error}", exc_info=True)
+                
+                # Fall back to requests library method if http.client fails
+                logging.info("Falling back to requests library method")
+                
+                # Set up the headers
+                headers = {
+                    'Content-Type': 'application/json',
+                    'access-token': access_token
+                }
+                
+                # Prepare the super order request
+                super_order_endpoint = f"{api_url}/super/orders"
+                
+                # Prepare the payload
+                payload = {
+                    'dhanClientId': dhan_client_id,
+                    'correlationId': correlation_id,
+                    'transactionType': 'BUY',
+                    'exchangeSegment': self.get_dhan_exchange_segment(order_params['symbol']),
+                    'productType': self.config.get('dhan_product_type', 'CNC'),
+                    'orderType': order_params['order_type'],
+                    'securityId': security_id,
                     'quantity': order_params['position_size'],
-                    'price': order_params['current_price'] if order_params['order_type'] == 'MARKET' else order_params['limit_price'],
-                    'order_type': order_params['order_type'],
-                    'stop_loss': order_params['stop_loss'],
-                    'target': order_params['target'],
-                    'status': 'open',
-                    'timestamp': datetime.now().isoformat(),
-                    'broker': 'dhan',
-                    'order_id': response_data.get('orderId'),
-                    'security_id': security_id,
-                    'trailing_jump': trailing_jump
+                    'price': str(price) if price else None,
+                    'targetPrice': str(order_params['target']),
+                    'stopLossPrice': str(order_params['stop_loss']),
+                    'trailingJump': trailing_jump
                 }
                 
-                # Add to order history
-                self.order_history['orders'].append(order)
-                self.save_order_history()
+                # Remove None values from payload
+                payload = {k: v for k, v in payload.items() if v is not None}
                 
-                return {
-                    'success': True,
-                    'order_id': response_data.get('orderId'),
-                    'message': "Dhan Super Order placed successfully"
-                }
-            else:
-                logging.error(f"Failed to place Dhan Super Order: {response.text}")
-                return {
-                    'success': False,
-                    'status_code': response.status_code,
-                    'message': f"Failed to place Dhan Super Order: {response.text}"
-                }
+                logging.info(f"Dhan Super Order payload: {json.dumps(payload)}")
+                
+                # Make the API request using requests library
+                response = requests.post(super_order_endpoint, headers=headers, json=payload)
+                
+                # Log full response for debugging
+                logging.info(f"Dhan API response status: {response.status_code}")
+                logging.info(f"Dhan API response body: {response.text}")
+                
+                # Check if the request was successful
+                if response.status_code == 200:
+                    response_data = response.json()
+                    logging.info(f"Dhan Super Order placed successfully: {response_data}")
+                    
+                    # Prepare order record
+                    order = {
+                        'symbol': order_params['symbol'],
+                        'quantity': order_params['position_size'],
+                        'price': order_params['current_price'] if order_params['order_type'] == 'MARKET' else order_params['limit_price'],
+                        'order_type': order_params['order_type'],
+                        'stop_loss': order_params['stop_loss'],
+                        'target': order_params['target'],
+                        'status': 'open',
+                        'timestamp': datetime.now().isoformat(),
+                        'broker': 'dhan',
+                        'order_id': response_data.get('orderId'),
+                        'security_id': security_id,
+                        'trailing_jump': trailing_jump
+                    }
+                    
+                    # Add to order history
+                    self.order_history['orders'].append(order)
+                    self.save_order_history()
+                    
+                    return {
+                        'success': True,
+                        'order_id': response_data.get('orderId'),
+                        'message': "Dhan Super Order placed successfully"
+                    }
+                else:
+                    logging.error(f"Failed to place Dhan Super Order: {response.text}")
+                    return {
+                        'success': False,
+                        'status_code': response.status_code,
+                        'message': f"Failed to place Dhan Super Order: {response.text}"
+                    }
         
         except Exception as e:
             logging.error(f"Error placing Dhan Super Order: {e}", exc_info=True)
@@ -532,26 +640,45 @@ class AutoOrderPlacer:
                 'message': f"Error placing Dhan Super Order: {str(e)}"
             }
     
-    def get_security_id_for_symbol(self, symbol):
-        """Get the security ID for a given symbol from the database"""
+    def get_security_id_for_symbol(self, symbol_or_name):
+        """Get the security ID for a given symbol or name from the database (robust match)"""
         if not self.conn:
             if not self.connect_db():
                 return None
-        
+        import re
+        def normalize(s):
+            if not s:
+                return ''
+            return re.sub(r'[^A-Z0-9]', '', str(s).upper())
         try:
-            query = """
-                SELECT security_id FROM stocks WHERE symbol = ?
-            """
             cursor = self.conn.cursor()
-            cursor.execute(query, (symbol,))
-            result = cursor.fetchone()
-            
-            if result:
-                return result[0]
-            else:
-                logging.warning(f"Security ID not found for symbol: {symbol}")
-                return None
-                
+            # Fetch all symbols and names with their security IDs
+            cursor.execute("SELECT symbol, name, security_id FROM stocks")
+            rows = cursor.fetchall()
+            norm_input = normalize(symbol_or_name)
+            # Try direct symbol match
+            for symbol, name, secid in rows:
+                if normalize(symbol) == norm_input:
+                    return secid
+            # Try direct name match
+            for symbol, name, secid in rows:
+                if normalize(name) == norm_input:
+                    return secid
+            # Try substring match
+            for symbol, name, secid in rows:
+                if norm_input in normalize(symbol) or normalize(symbol) in norm_input:
+                    return secid
+                if norm_input in normalize(name) or normalize(name) in norm_input:
+                    return secid
+            # Try acronym match
+            def acronym(s):
+                return ''.join(word[0] for word in re.findall(r'\b\w', s.upper())) if s else ''
+            input_acronym = acronym(symbol_or_name)
+            for symbol, name, secid in rows:
+                if acronym(symbol) == input_acronym or acronym(name) == input_acronym:
+                    return secid
+            logging.warning(f"Security ID not found for symbol or name: {symbol_or_name}")
+            return None
         except sqlite3.Error as e:
             logging.error(f"Database error getting security ID: {e}")
             return None
@@ -647,7 +774,7 @@ class AutoOrderPlacer:
             
             # Check if required settings are available
             dhan_client_id = self.config.get('dhan_client_id')
-            access_token = self.config.get('dhan_access_token')
+            access_token = self.config.get('api_secret')
             api_url = self.config.get('dhan_api_url')
             
             if not dhan_client_id or not access_token:
@@ -740,7 +867,7 @@ class AutoOrderPlacer:
             
             # Check if required settings are available
             dhan_client_id = self.config.get('dhan_client_id')
-            access_token = self.config.get('dhan_access_token')
+            access_token = self.config.get('api_secret')
             api_url = self.config.get('dhan_api_url')
             
             if not dhan_client_id or not access_token:
@@ -800,7 +927,7 @@ class AutoOrderPlacer:
             
             # Check if required settings are available
             dhan_client_id = self.config.get('dhan_client_id')
-            access_token = self.config.get('dhan_access_token')
+            access_token = self.config.get('api_secret')
             api_url = self.config.get('dhan_api_url')
             
             if not dhan_client_id or not access_token:
@@ -897,45 +1024,51 @@ class AutoOrderPlacer:
 
     def load_dhan_credentials(self):
         """Load Dhan credentials from .env file"""
-        env_path = Path('.env-new')
-        if (env_path.exists()):
-            try:
-                # Load environment variables from .env-new file
+        # Try loading from both .env and .env-new files
+        
+        # First try the standard .env file
+        dotenv.load_dotenv('.env')
+        
+        # Get the API key from environment
+        dhan_api_key = os.getenv('DHAN_ACCESS_TOKEN') or os.getenv('DHAN_API_KEY')
+        
+        if not dhan_api_key:
+            # If not found, try .env-new
+            env_path = Path('.env-new')
+            if (env_path.exists()):
                 dotenv.load_dotenv('.env-new')
+                dhan_api_key = os.getenv('DHAN_ACCESS_TOKEN') or os.getenv('DHAN_API_KEY')
+        
+        # If we found a key in either file, use it
+        if dhan_api_key:
+            try:
+                # For simple version, just use the token directly
+                self.config['broker'] = 'dhan'
+                self.config['dhan_access_token'] = dhan_api_key
                 
-                # Get the API key from environment
-                dhan_api_key = os.getenv('DHAN_API_KEY')
-                
-                if dhan_api_key:
-                    # Extract client ID from the API key (JWT token)
+                # Try to extract client ID from the token if possible
+                try:
                     import jwt
-                    try:
-                        # JWT tokens have three parts separated by dots
-                        # We don't need to verify the signature, just extract the payload
-                        payload = jwt.decode(dhan_api_key, options={"verify_signature": False})
-                        dhan_client_id = payload.get('dhanClientId')
-                        
-                        if dhan_client_id:
-                            # Update configuration
-                            self.config['broker'] = 'dhan'
-                            self.config['dhan_client_id'] = dhan_client_id
-                            self.config['dhan_access_token'] = dhan_api_key
-                            
-                            # Save the updated configuration
-                            self.save_config()
-                            
-                            logging.info(f"Successfully loaded Dhan credentials for client ID: {dhan_client_id}")
-                            return True
-                        else:
-                            logging.error("Could not extract dhanClientId from API key")
-                    except Exception as e:
-                        logging.error(f"Error decoding Dhan API key: {e}")
-                else:
-                    logging.warning("DHAN_API_KEY not found in .env-new file")
+                    # JWT tokens have three parts separated by dots
+                    # We don't need to verify the signature, just extract the payload
+                    payload = jwt.decode(dhan_api_key, options={"verify_signature": False})
+                    dhan_client_id = payload.get('dhanClientId')
+                    
+                    if dhan_client_id:
+                        self.config['dhan_client_id'] = dhan_client_id
+                except:
+                    # If we couldn't extract client ID from token, use the configured one
+                    logging.info("Could not extract client ID from token, using configured value")
+                
+                # Save the updated configuration
+                self.save_config()
+                
+                logging.info(f"Successfully loaded Dhan credentials")
+                return True
             except Exception as e:
-                logging.error(f"Error loading .env-new file: {e}")
+                logging.error(f"Error processing Dhan credentials: {e}")
         else:
-            logging.warning(".env-new file not found")
+            logging.warning("Dhan API key not found in .env or .env-new files")
         
         return False
 

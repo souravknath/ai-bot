@@ -332,7 +332,7 @@ class AISignalGenerator:
             logging.error(f"Error analyzing multiple stocks: {e}")
             return []
         finally:
-            # Don't close the db here, let the caller close it
+            pass  # No action needed, but required for valid syntax
 
 # For testing
 if __name__ == "__main__":
